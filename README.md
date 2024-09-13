@@ -1,4 +1,4 @@
-# B0x-fi
+# n0xtilus
 
 ## Overview
 
@@ -15,7 +15,7 @@ _Freddy see chart. He think number go up on chart. Freddy just open tool and typ
 
 ### Future Features:
 
-1. Short and Long postions available
+1. Short and Long positions available
 2. Ability to paste API from your favourite exchange
 3. Advanced trade management 
 4. Support for any pair available on your favoured exchange
