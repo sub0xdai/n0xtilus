@@ -20,7 +20,7 @@ func main() {
 	orderService := services.NewOrderService(client, riskCalculator)
 	// Check if a command was provided
 	if len(os.Args) < 2 {
-		fmt.Println("Usage: b0xfi <command>")
+		fmt.Println("Usage: n0xtilus <command>")
 		fmt.Println("Available commands: balance, trade")
 		os.Exit(1)
 	}
@@ -34,7 +34,7 @@ func main() {
 		}
 		fmt.Printf("Current balance: %f\n", balance)
 	case "trade":
-		executeTrade(client, orderService, 1.0) // Using a placeholder risk percentage of 1%
+		executeTrade(client, orderService, 0.02) // Using a risk percentage of 2%
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		fmt.Println("Available commands: balance, trade")
@@ -97,37 +97,43 @@ func executeTrade(client *api.APIClient, orderService *services.OrderService, ri
         log.Fatalf("Invalid leverage: %v", err)
     }
     
-    // Calculate the maximum risk amount based on the risk percentage
+    // Calculate the maximum amount we're willing to risk using the provided riskPercentage
     maxRiskAmount := availableMargin * riskPercentage
-    
-    // Calculate the position size based on the risk amount and stop loss
-    stopLossDistance := math.Abs(entryPrice - stopLossPrice) / entryPrice // as a percentage
-    maxPositionSize := maxRiskAmount / stopLossDistance
+    fmt.Printf("Maximum risk amount: $%.2f (%.2f%% of available margin)\n", maxRiskAmount, riskPercentage*100)
 
-    // Apply leverage to get the maximum leveraged position size
-    maxLeveragedPositionSize := maxPositionSize * leverage
+    // Calculate the stop loss distance as a percentage
+    stopLossDistance := math.Abs(entryPrice - stopLossPrice) / entryPrice
+    fmt.Printf("Stop loss distance: %.2f%%\n", stopLossDistance * 100)
+
+    // Calculate the position size based on the risk amount and stop loss
+    positionSize := maxRiskAmount / stopLossDistance
+    fmt.Printf("Position size: $%.2f\n", positionSize)
+
+    // Apply leverage to get the leveraged position size
+    leveragedPositionSize := positionSize * leverage
+    fmt.Printf("Leveraged position size: $%.2f\n", leveragedPositionSize)
 
     // Calculate the margin required for this position
-    marginRequired := maxLeveragedPositionSize / leverage
+    marginRequired := leveragedPositionSize / leverage
+    fmt.Printf("Margin required: $%.2f\n", marginRequired)
 
     // Check if we have enough margin available
     if marginRequired > availableMargin {
         fmt.Printf("Warning: Required margin ($%.2f) exceeds available margin ($%.2f)\n", marginRequired, availableMargin)
-        fmt.Println("Adjusting position size to match available margin...")
-        marginRequired = availableMargin
-        maxLeveragedPositionSize = marginRequired * leverage
+        fmt.Println("The trade cannot be executed with the current parameters.")
+        return
     }
 
-    fmt.Printf("Calculated position size: $%.2f\n", maxLeveragedPositionSize)
+    fmt.Printf("Final position size: $%.2f\n", leveragedPositionSize)
     fmt.Printf("Margin used: $%.2f\n", marginRequired)
-    fmt.Printf("Effective leverage: %.2fx\n", maxLeveragedPositionSize / marginRequired)
+    fmt.Printf("Effective leverage: %.2fx\n", leveragedPositionSize / marginRequired)
 
     fmt.Print("Do you want to place this trade? (yes/no): ")
     confirmStr, _ := reader.ReadString('\n')
     confirm := strings.TrimSpace(confirmStr)
     if strings.ToLower(confirm) == "yes" {
         // Place the order
-        order, err := orderService.PlaceOrder(selectedPair, "buy", fmt.Sprintf("%.2f", maxLeveragedPositionSize), fmt.Sprintf("%.2f", entryPrice))
+        order, err := orderService.PlaceOrder(selectedPair, "buy", fmt.Sprintf("%.2f", leveragedPositionSize), fmt.Sprintf("%.2f", entryPrice))
         if err != nil {
             log.Fatalf("Failed to place order: %v", err)
         }
