@@ -3,7 +3,7 @@ package services
 import (
 	"fmt"
 
-	"github.com/tehuticode/b0xfi/internal/api"
+	"github.com/tehuticode/n0xtilus/internal/api"
 )
 
 type OrderService struct {

@@ -1,18 +1,42 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"log"
 	"os"
 	"math"
 	"strconv"
 	"strings"
-	"github.com/tehuticode/b0xfi/internal/api"
-	"github.com/tehuticode/b0xfi/internal/services"
+	"time"
+	"github.com/tehuticode/n0xtilus/internal/api"
+	"github.com/tehuticode/n0xtilus/internal/services"
+	"github.com/tehuticode/n0xtilus/internal/ui"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
+var (
+	errorLog *log.Logger
+)
+
+func initErrorLog() {
+	currentTime := time.Now()
+	logFileName := fmt.Sprintf("error_log_%s.txt", currentTime.Format("2006-01-02"))
+	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("Failed to open log file: %v", err)
+	}
+	errorLog = log.New(logFile, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
+}
+
+func logError(err error) {
+	if errorLog != nil {
+		errorLog.Println(err)
+	}
+}
+
 func main() {
+	initErrorLog()
+
 	// Initialize API client with placeholder values
 	client := api.NewAPIClient("placeholder_key", "placeholder_secret")
 	// Initialize services
@@ -30,11 +54,15 @@ func main() {
 	case "balance":
 		balance, err := client.GetBalance()
 		if err != nil {
+			logError(fmt.Errorf("failed to get balance: %v", err))
 			log.Fatalf("Failed to get balance: %v", err)
 		}
 		fmt.Printf("Current balance: %f\n", balance)
 	case "trade":
-		executeTrade(client, orderService, 0.02) // Using a risk percentage of 2%
+		if err := runTradeWidget(client, orderService, 0.02); err != nil {
+			logError(err)
+			log.Fatal(err)
+		}
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		fmt.Println("Available commands: balance, trade")
@@ -42,107 +70,112 @@ func main() {
 	}
 }
 
-func executeTrade(client *api.APIClient, orderService *services.OrderService, riskPercentage float64) {
-    reader := bufio.NewReader(os.Stdin)
-    
-    // Get account balance first (this is our available margin)
-    availableMargin, err := client.GetBalance()
-    if err != nil {
-        log.Fatalf("Failed to get balance: %v", err)
-    }
-    fmt.Printf("Available margin: $%.2f\n", availableMargin)
+func runTradeWidget(client *api.APIClient, orderService *services.OrderService, riskPercentage float64) error {
+	availableMargin, err := client.GetBalance()
+	if err != nil {
+		return fmt.Errorf("failed to get balance: %v", err)
+	}
 
-    // Fetch tradable pairs
-    pairs, err := client.GetTradablePairs()
-    if err != nil {
-        log.Fatalf("Failed to fetch tradable pairs: %v", err)
-    }
-    
-    // Display pairs and let user select
-    fmt.Println("Available trading pairs:")
-    for i, pair := range pairs {
-        fmt.Printf("%d. %s\n", i+1, pair)
-    }
-    var selectedPair string
-    for {
-        fmt.Print("Enter the number of the pair you want to trade: ")
-        input, _ := reader.ReadString('\n')
-        index, err := strconv.Atoi(strings.TrimSpace(input))
-        if err != nil || index < 1 || index > len(pairs) {
-            fmt.Println("Invalid selection. Please try again.")
-            continue
-        }
-        selectedPair = pairs[index-1]
-        break
-    }
+	pairs, err := client.GetTradablePairs()
+	if err != nil {
+		return fmt.Errorf("failed to fetch tradable pairs: %v", err)
+	}
 
-    fmt.Print("Enter the entry price: ")
-    entryPriceStr, _ := reader.ReadString('\n')
-    entryPrice, err := strconv.ParseFloat(strings.TrimSpace(entryPriceStr), 64)
-    if err != nil {
-        log.Fatalf("Invalid entry price: %v", err)
-    }
+	pairsQuestion := fmt.Sprintf("Select trading pair (1-%d):\n", len(pairs))
+	for i, pair := range pairs {
+		pairsQuestion += fmt.Sprintf("%d. %s\n", i+1, pair)
+	}
 
-    fmt.Print("Enter the stop loss price: ")
-    stopLossPriceStr, _ := reader.ReadString('\n')
-    stopLossPrice, err := strconv.ParseFloat(strings.TrimSpace(stopLossPriceStr), 64)
-    if err != nil {
-        log.Fatalf("Invalid stop loss price: %v", err)
-    }
+	questions := []ui.Question{
+		ui.NewShortQuestion(pairsQuestion),
+		ui.NewShortQuestion("Entry:"),
+		ui.NewShortQuestion("Stop Loss:"),
+		ui.NewShortQuestion("Leverage (5 for 5x leverage):"),
+	}
 
-    fmt.Print("Enter the leverage (e.g., 5 for 5x leverage): ")
-    leverageStr, _ := reader.ReadString('\n')
-    leverage, err := strconv.ParseFloat(strings.TrimSpace(leverageStr), 64)
-    if err != nil {
-        log.Fatalf("Invalid leverage: %v", err)
-    }
-    
-    // Calculate the maximum amount we're willing to risk using the provided riskPercentage
-    maxRiskAmount := availableMargin * riskPercentage
-    fmt.Printf("Maximum risk amount: $%.2f (%.2f%% of available margin)\n", maxRiskAmount, riskPercentage*100)
+	widget := ui.New(questions)
+	p := tea.NewProgram(widget, tea.WithAltScreen())
 
-    // Calculate the stop loss distance as a percentage
-    stopLossDistance := math.Abs(entryPrice - stopLossPrice) / entryPrice
-    fmt.Printf("Stop loss distance: %.2f%%\n", stopLossDistance * 100)
+	m, err := p.Run()
+	if err != nil {
+		return err
+	}
 
-    // Calculate the position size based on the risk amount and stop loss
-    positionSize := maxRiskAmount / stopLossDistance
-    fmt.Printf("Position size: $%.2f\n", positionSize)
+	answers := m.(*ui.Main).GetAnswers()
 
-    // Apply leverage to get the leveraged position size
-    leveragedPositionSize := positionSize * leverage
-    fmt.Printf("Leveraged position size: $%.2f\n", leveragedPositionSize)
+	// Process answers
+	pairIndex, err := strconv.Atoi(answers[0])
+	if err != nil {
+		return fmt.Errorf("invalid pair selection: %v", err)
+	}
+	selectedPair := pairs[pairIndex-1]
+	entryPrice, err := strconv.ParseFloat(answers[1], 64)
+	if err != nil {
+		return fmt.Errorf("invalid entry price: %v", err)
+	}
+	stopLossPrice, err := strconv.ParseFloat(answers[2], 64)
+	if err != nil {
+		return fmt.Errorf("invalid stop loss price: %v", err)
+	}
+	leverage, err := strconv.ParseFloat(answers[3], 64)
+	if err != nil {
+		return fmt.Errorf("invalid leverage: %v", err)
+	}
 
-    // Calculate the margin required for this position
-    marginRequired := leveragedPositionSize / leverage
-    fmt.Printf("Margin required: $%.2f\n", marginRequired)
+	// Calculate trade parameters
+	maxRiskAmount := availableMargin * riskPercentage
+	stopLossDistance := math.Abs(entryPrice - stopLossPrice) / entryPrice
+	positionSize := maxRiskAmount / stopLossDistance
+	leveragedPositionSize := positionSize * leverage
+	marginRequired := leveragedPositionSize / leverage
 
-    // Check if we have enough margin available
-    if marginRequired > availableMargin {
-        fmt.Printf("Warning: Required margin ($%.2f) exceeds available margin ($%.2f)\n", marginRequired, availableMargin)
-        fmt.Println("The trade cannot be executed with the current parameters.")
-        return
-    }
+	// Display trade information
+	fmt.Printf("\nTrade Information:\n")
+	fmt.Printf("Available margin: $%.2f\n", availableMargin)
+	fmt.Printf("Selected pair: %s\n", selectedPair)
+	fmt.Printf("Entry price: $%.2f\n", entryPrice)
+	fmt.Printf("Stop loss price: $%.2f\n", stopLossPrice)
+	fmt.Printf("Leverage: %.2fx\n", leverage)
+	fmt.Printf("Maximum risk amount: $%.2f (%.2f%% of available margin)\n", maxRiskAmount, riskPercentage*100)
+	fmt.Printf("Stop loss distance: %.2f%%\n", stopLossDistance * 100)
+	fmt.Printf("Position size: $%.2f\n", positionSize)
+	fmt.Printf("Leveraged position size: $%.2f\n", leveragedPositionSize)
+	fmt.Printf("Margin required: $%.2f\n", marginRequired)
 
-    fmt.Printf("Final position size: $%.2f\n", leveragedPositionSize)
-    fmt.Printf("Margin used: $%.2f\n", marginRequired)
-    fmt.Printf("Effective leverage: %.2fx\n", leveragedPositionSize / marginRequired)
+	if marginRequired > availableMargin {
+		return fmt.Errorf("required margin ($%.2f) exceeds available margin ($%.2f)", marginRequired, availableMargin)
+	}
 
-    fmt.Print("Do you want to place this trade? (yes/no): ")
-    confirmStr, _ := reader.ReadString('\n')
-    confirm := strings.TrimSpace(confirmStr)
-    if strings.ToLower(confirm) == "yes" {
-        // Place the order
-        order, err := orderService.PlaceOrder(selectedPair, "buy", fmt.Sprintf("%.2f", leveragedPositionSize), fmt.Sprintf("%.2f", entryPrice))
-        if err != nil {
-            log.Fatalf("Failed to place order: %v", err)
-        }
-        fmt.Printf("Order placed: %s\n", order)
-        
-        // Update available margin
-        availableMargin -= marginRequired
-        fmt.Printf("Remaining available margin: $%.2f\n", availableMargin)
-    } else {
-        fmt.Println("Trade cancelled.")
-    }
+	fmt.Printf("Final position size: $%.2f\n", leveragedPositionSize)
+	fmt.Printf("Margin used: $%.2f\n", marginRequired)
+	fmt.Printf("Effective leverage: %.2fx\n", leveragedPositionSize / marginRequired)
+
+	// Confirm trade
+	confirmQuestions := []ui.Question{
+		ui.NewShortQuestion("Do you want to place this trade? (yes/no):"),
+	}
+	confirmWidget := ui.New(confirmQuestions)
+	confirmP := tea.NewProgram(confirmWidget, tea.WithAltScreen())
+	confirmM, err := confirmP.Run()
+	if err != nil {
+		return err
+	}
+	confirmAnswer := confirmM.(*ui.Main).GetAnswers()[0]
+
+	if strings.ToLower(confirmAnswer) == "yes" {
+		// Place the order
+		order, err := orderService.PlaceOrder(selectedPair, "buy", fmt.Sprintf("%.2f", leveragedPositionSize), fmt.Sprintf("%.2f", entryPrice))
+		if err != nil {
+			return fmt.Errorf("failed to place order: %v", err)
+		}
+		fmt.Printf("Order placed: %s\n", order)
+		
+		// Update available margin
+		availableMargin -= marginRequired
+		fmt.Printf("Remaining available margin: $%.2f\n", availableMargin)
+	} else {
+		fmt.Println("Trade cancelled.")
+	}
+
+	return nil
 }
