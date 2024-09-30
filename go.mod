@@ -1,4 +1,4 @@
-module github.com/tehuticode/n0xtilus
+module github.com/sub0xdai/n0xtilus
 
 go 1.23.0
 

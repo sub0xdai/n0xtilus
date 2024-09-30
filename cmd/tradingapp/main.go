@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"github.com/tehuticode/n0xtilus/internal/api"
-	"github.com/tehuticode/n0xtilus/internal/services"
-	"github.com/tehuticode/n0xtilus/internal/ui"
+	"github.com/sub0xdai/n0xtilus/internal/api"
+	"github.com/sub0xdai/n0xtilus/internal/services"
+	"github.com/sub0xdai/n0xtilus/internal/ui"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
