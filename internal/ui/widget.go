@@ -1,131 +1,96 @@
-
 package ui
 
 import (
 	"fmt"
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
-type Styles struct {
-	BorderColor lipgloss.Color
-	InputField  lipgloss.Style
+// ... (keep existing Main struct and methods)
+
+type TradeInfoWidget struct {
+	info   map[string]string
+	style  lipgloss.Style
+	done   bool
 }
 
-func DefaultStyles() *Styles {
-	s := new(Styles)
-	s.BorderColor = lipgloss.Color("36")
-	s.InputField = lipgloss.NewStyle().BorderForeground(s.BorderColor).BorderStyle(lipgloss.NormalBorder()).Padding(1).Width(80)
-	return s
+func NewTradeInfoWidget(info map[string]string) *TradeInfoWidget {
+	return &TradeInfoWidget{
+		info:  info,
+		style: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(1),
+	}
 }
 
-type Main struct {
-	styles    *Styles
-	index     int
-	questions []Question
-	width     int
-	height    int
-	done      bool
+func (m *TradeInfoWidget) Init() tea.Cmd {
+	return nil
 }
 
-type Question struct {
-	question string
-	answer   string
-	input    Input
-}
-
-func newQuestion(q string) Question {
-	return Question{question: q}
-}
-
-// Export this function
-func NewShortQuestion(q string) Question {
-	question := newQuestion(q)
-	model := NewShortAnswerField()
-	question.input = model
-	return question
-}
-
-// Export this function
-func NewLongQuestion(q string) Question {
-	question := newQuestion(q)
-	model := NewLongAnswerField()
-	question.input = model
-	return question
-}
-
-func New(questions []Question) *Main {
-	styles := DefaultStyles()
-	return &Main{styles: styles, questions: questions}
-}
-
-func (m Main) Init() tea.Cmd {
-	return m.questions[m.index].input.Blink
-}
-
-func (m Main) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	current := &m.questions[m.index]
-	var cmd tea.Cmd
+func (m *TradeInfoWidget) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "q":
+		case "enter", " ":
+			m.done = true
 			return m, tea.Quit
-		case "enter":
-			if m.index == len(m.questions)-1 {
-				m.done = true
-			}
-			current.answer = current.input.Value()
-			m.Next()
-			return m, current.input.Blur
 		}
 	}
-	current.input, cmd = current.input.Update(msg)
-	return m, cmd
+	return m, nil
 }
 
-func (m Main) View() string {
-	current := m.questions[m.index]
-	if m.done {
-		var output string
-		for _, q := range m.questions {
-			output += fmt.Sprintf("%s: %s\n", q.question, q.answer)
+func (m *TradeInfoWidget) View() string {
+	var b strings.Builder
+	b.WriteString("Trade Information\n\n")
+	
+	for k, v := range m.info {
+		b.WriteString(fmt.Sprintf("%s: %s\n", k, v))
+	}
+	
+	b.WriteString("\nPress Enter to continue")
+	
+	return m.style.Render(b.String())
+}
+
+type ConfirmWidget struct {
+	question string
+	confirmed bool
+	done     bool
+}
+
+func NewConfirmWidget(question string) *ConfirmWidget {
+	return &ConfirmWidget{
+		question: question,
+	}
+}
+
+func (m *ConfirmWidget) Init() tea.Cmd {
+	return nil
+}
+
+func (m *ConfirmWidget) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "y", "Y":
+			m.confirmed = true
+			m.done = true
+			return m, tea.Quit
+		case "n", "N":
+			m.confirmed = false
+			m.done = true
+			return m, tea.Quit
 		}
-		return output
 	}
-	if m.width == 0 {
-		return "loading..."
-	}
-	// stack some left-aligned strings together in the center of the window
-	return lipgloss.Place(
-		m.width,
-		m.height,
-		lipgloss.Center,
-		lipgloss.Center,
-		lipgloss.JoinVertical(
-			lipgloss.Left,
-			current.question,
-			m.styles.InputField.Render(current.input.View()),
-		),
+	return m, nil
+}
+
+func (m *ConfirmWidget) View() string {
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(1).Render(
+		fmt.Sprintf("%s (y/n)", m.question),
 	)
 }
 
-func (m *Main) Next() {
-	if m.index < len(m.questions)-1 {
-		m.index++
-	} else {
-		m.index = 0
-	}
-}
-
-// Add this method to get answers
-func (m *Main) GetAnswers() []string {
-	answers := make([]string, len(m.questions))
-	for i, q := range m.questions {
-		answers[i] = q.answer
-	}
-	return answers
+func (m *ConfirmWidget) Confirmed() bool {
+	return m.confirmed
 }

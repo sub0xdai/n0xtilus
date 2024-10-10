@@ -2,7 +2,7 @@
 
 ## Overview
 
-CLI tool written in go, designed to trade perpetual swaps with trade exectuion and position-sizing automation.
+CLI tool written in go, designed to trade perpetual swaps with trade execution and position-sizing automation.
 
 ## EXAMPLE:
 
