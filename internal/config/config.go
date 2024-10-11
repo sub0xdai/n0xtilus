@@ -7,6 +7,7 @@ import (
 type Config struct {
 	APIKey         string
 	APISecret      string
+  APIBaseURL     string
 	RiskPercentage float64
 }
 

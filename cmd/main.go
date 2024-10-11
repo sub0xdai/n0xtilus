@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"math"
+  "github.com/sub0xdai/n0xtilus/internal/config"
 	"github.com/sub0xdai/n0xtilus/internal/api"
 	"github.com/sub0xdai/n0xtilus/internal/services"
 	"github.com/sub0xdai/n0xtilus/internal/ui"
@@ -12,37 +13,51 @@ import (
 )
 
 func main() {
+
+  // Load configuration
+    cfg, err := config.Load()
+    if err != nil {
+        log.Fatalf("Failed to load configuration: %v", err)
+    }
+
 	// Initialize API client with placeholder values
-	client := api.NewAPIClient("placeholder_key", "placeholder_secret")
+	client := api.NewAPIClient(cfg.APIKey, cfg.APISecret, cfg.APIBaseURL)
+
+
 	// Initialize services
 	riskCalculator := services.NewRiskCalculator()
 	orderService := services.NewOrderService(client, riskCalculator)
 
-	// Check if a command was provided
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: n0xtilus <command>")
-		fmt.Println("Available commands: balance, trade")
-		os.Exit(1)
-	}
+		   
 
 	// Parse the command
+  if len(os.Args) < 2 {
+        log.Fatal("Usage: n0xtilus <command>")
+    }
+
 	command := os.Args[1]
-	switch command {
-	case "balance":
-		balance, err := client.GetBalance()
-		if err != nil {
-			log.Fatalf("Failed to get balance: %v", err)
-		}
-		fmt.Printf("Current balance: %f\n", balance)
-	case "trade":
-		if err := runTradeWidget(client, orderService, 0.02); err != nil {
-			log.Fatal(err)
-		}
-	default:
-		fmt.Printf("Unknown command: %s\n", command)
-		fmt.Println("Available commands: balance, trade")
-		os.Exit(1)
-	}
+    switch command {
+    case "balance":
+        handleBalance(client)
+    case "trade":
+        handleTrade(client, orderService, cfg.RiskPercentage)
+    default:
+        log.Fatalf("Unknown command: %s", command)
+    }
+}
+
+func handleBalance(client *api.APIClient) {
+    balance, err := client.GetBalance()
+    if err != nil {
+        log.Fatalf("Failed to get balance: %v", err)
+    }
+    fmt.Printf("Current balance: %.2f\n", balance)
+}
+
+func handleTrade(client *api.APIClient, orderService *services.OrderService, riskPercentage float64) {
+    if err := runTradeWidget(client, orderService, riskPercentage); err != nil {
+        log.Fatalf("Trade execution failed: %v", err)
+    }
 }
 
 func runTradeWidget(client *api.APIClient, orderService *services.OrderService, riskPercentage float64) error {
