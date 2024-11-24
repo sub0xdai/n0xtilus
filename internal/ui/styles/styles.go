@@ -49,6 +49,12 @@ var (
 		Foreground(Text).
 		Bold(true)
 
+	// Empty state styles
+	EmptyStyle = lipgloss.NewStyle().
+		Foreground(Overlay0).
+		Italic(true).
+		Align(lipgloss.Center)
+
 	// Prompt styles
 	PromptStyle = lipgloss.NewStyle().
 		Foreground(Lavender)
