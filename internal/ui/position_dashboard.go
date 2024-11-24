@@ -109,33 +109,51 @@ func (d *PositionDashboard) handleCommand() (tea.Model, tea.Cmd) {
 func (d *PositionDashboard) renderPosition(p Position) string {
 	var lines []string
 
-	// Trading pair
-	lines = append(lines, styles.PairStyle.Render(p.Symbol))
+	// Trading pair header
+	pairBox := styles.BoxStyle.Copy().
+		BorderTop(true).
+		BorderLeft(true).
+		BorderRight(true).
+		BorderBottom(true).
+		Padding(0, 1).
+		Render(styles.PairStyle.Render(p.Symbol))
+	lines = append(lines, pairBox)
 
 	// Position details
-	positionLine := fmt.Sprintf("%s %s",
-		styles.LabelStyle.Render("Position:"),
-		styles.ValueStyle.Render(fmt.Sprintf("%.4f BTC ($%.2f)", p.Size, p.EntryPrice)),
-	)
-	lines = append(lines, positionLine)
+	detailsContent := []string{
+		fmt.Sprintf("%s %s",
+			styles.LabelStyle.Render("Position:"),
+			styles.ValueStyle.Render(fmt.Sprintf("%.4f BTC ($%.2f)", p.Size, p.EntryPrice)),
+		),
+		"",
+		fmt.Sprintf("%s %s",
+			styles.LabelStyle.Render("Current:"),
+			styles.ValueStyle.Render(fmt.Sprintf("$%.2f", p.CurrentPrice)),
+		),
+	}
 
-	// PnL
+	// PnL with color
 	pnlStyle := styles.PnLPositiveStyle
 	if p.PnL < 0 {
 		pnlStyle = styles.PnLNegativeStyle
 	}
-	pnlLine := fmt.Sprintf("%s %s",
-		styles.LabelStyle.Render("PnL:"),
-		pnlStyle.Render(fmt.Sprintf("$%.2f", p.PnL)),
+	detailsContent = append(detailsContent,
+		"",
+		fmt.Sprintf("%s %s",
+			styles.LabelStyle.Render("PnL:"),
+			pnlStyle.Render(fmt.Sprintf("$%.2f", p.PnL)),
+		),
 	)
-	lines = append(lines, pnlLine)
 
-	// Risk
-	riskLine := fmt.Sprintf("%s %s",
-		styles.LabelStyle.Render("Risk:"),
-		styles.RiskStyle.Render(fmt.Sprintf("$%.2f", p.CurrentPrice)),
-	)
-	lines = append(lines, riskLine)
+	detailsBox := styles.BoxStyle.Copy().
+		BorderTop(true).
+		BorderLeft(true).
+		BorderRight(true).
+		BorderBottom(true).
+		Padding(1, 2).
+		Render(lipgloss.JoinVertical(lipgloss.Left, detailsContent...))
+
+	lines = append(lines, detailsBox)
 
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
@@ -143,86 +161,81 @@ func (d *PositionDashboard) renderPosition(p Position) string {
 func (d *PositionDashboard) View() string {
 	var sections []string
 
-	// Title box
-	titleContent := lipgloss.JoinVertical(lipgloss.Left,
+	// Header with balance
+	headerContent := lipgloss.JoinVertical(lipgloss.Center,
+		styles.TitleStyle.Render("Position Dashboard"),
 		"",
-		fmt.Sprintf("  %s", styles.BalanceStyle.Render(fmt.Sprintf("Balance: $%.2f", d.balance))),
-		"",
+		styles.BalanceStyle.Render(fmt.Sprintf("Balance: $%.2f", d.balance)),
 	)
 
-	titleBox := styles.BoxStyle.Copy().
-		BorderTop(true).
-		BorderLeft(true).
-		BorderRight(true).
-		BorderBottom(false).
-		BorderStyle(lipgloss.NormalBorder()).
-		Render(titleContent)
-
-	sections = append(sections, titleBox)
-
-	// Positions box
-	var positionsContent string
-	if len(d.positions) == 0 {
-		positionsContent = "\n  No active positions\n"
-	} else {
-		var positionSections []string
-		positionSections = append(positionSections, "  Active Positions", "")
-
-		for _, p := range d.positions {
-			positionSections = append(positionSections, "  "+d.renderPosition(p))
-		}
-		positionsContent = lipgloss.JoinVertical(lipgloss.Left, positionSections...)
-	}
-
-	positionsBox := styles.BoxStyle.Copy().
+	headerBox := styles.BoxStyle.Copy().
 		BorderTop(true).
 		BorderLeft(true).
 		BorderRight(true).
 		BorderBottom(true).
-		BorderStyle(lipgloss.NormalBorder()).
-		Render(positionsContent)
+		Padding(1, 2).
+		Render(headerContent)
 
-	sections = append(sections, positionsBox)
+	sections = append(sections, headerBox)
 
-	// Help text (if visible)
-	if d.helpVisible {
-		helpText := []string{
-			"",
-			"  Commands:",
-			"    trade, t    - Open trade input",
-			"    help, h, ?  - Toggle help",
-			"    clear, c    - Clear messages",
-			"    quit, q     - Exit application",
-			"    ESC         - Clear input",
-			"",
+	// Positions section
+	var positionsContent string
+	if len(d.positions) == 0 {
+		positionsContent = styles.EmptyStyle.Render("No active positions")
+	} else {
+		var positionSections []string
+		for _, p := range d.positions {
+			positionSections = append(positionSections, d.renderPosition(p))
 		}
-		helpContent := lipgloss.JoinVertical(lipgloss.Left, helpText...)
+		positionsContent = lipgloss.JoinVertical(lipgloss.Left, positionSections...)
+	}
+
+	sections = append(sections, positionsContent)
+
+	// Command input
+	inputContent := fmt.Sprintf("%s %s",
+		styles.LabelStyle.Render("Command:"),
+		d.input,
+	)
+	if d.err != "" {
+		inputContent = fmt.Sprintf("%s\n%s",
+			inputContent,
+			styles.ErrorStyle.Render(d.err),
+		)
+	}
+
+	inputBox := styles.BoxStyle.Copy().
+		BorderTop(true).
+		BorderLeft(true).
+		BorderRight(true).
+		BorderBottom(true).
+		Padding(0, 1).
+		Render(inputContent)
+
+	sections = append(sections, inputBox)
+
+	// Help section
+	if d.helpVisible {
+		helpContent := []string{
+			"Available Commands:",
+			"",
+			"  trade, t    - Open trade input",
+			"  help, h, ?  - Toggle help",
+			"  clear, c    - Clear messages",
+			"  quit, q     - Exit application",
+			"  ESC         - Clear input",
+		}
+
 		helpBox := styles.BoxStyle.Copy().
-			BorderStyle(lipgloss.NormalBorder()).
-			Render(helpContent)
+			BorderTop(true).
+			BorderLeft(true).
+			BorderRight(true).
+			BorderBottom(true).
+			Padding(1, 2).
+			Render(lipgloss.JoinVertical(lipgloss.Left, helpContent...))
+
 		sections = append(sections, helpBox)
 	}
 
-	// Combine all sections
-	dashboard := lipgloss.JoinVertical(lipgloss.Left, sections...)
-
-	// Add prompt and error at the bottom
-	var bottomSections []string
-
-	if d.input != "" {
-		prompt := styles.LabelStyle.Render("> " + d.input)
-		bottomSections = append(bottomSections, prompt)
-	}
-
-	if d.err != "" {
-		errorMsg := styles.PnLNegativeStyle.Render(d.err)
-		bottomSections = append(bottomSections, errorMsg)
-	}
-
-	if len(bottomSections) > 0 {
-		bottom := lipgloss.JoinVertical(lipgloss.Left, bottomSections...)
-		dashboard = lipgloss.JoinVertical(lipgloss.Left, dashboard, "", bottom)
-	}
-
-	return dashboard
+	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
