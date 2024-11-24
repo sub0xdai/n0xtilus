@@ -4,6 +4,7 @@ import (
     "fmt"
     "strings"
     "github.com/charmbracelet/lipgloss"
+    "github.com/sub0xdai/n0xtilus/internal/ui/theme"
 )
 
 // OrderResult represents the result of a placed order
@@ -47,22 +48,22 @@ func (o *OrderResult) View() string {
 
     // Styles
     successStyle := lipgloss.NewStyle().
-        Foreground(green).
+        Foreground(theme.Green).
         Bold(true)
 
     labelStyle := lipgloss.NewStyle().
-        Foreground(subtext1).
+        Foreground(theme.Subtext1).
         Width(12)
 
     valueStyle := lipgloss.NewStyle().
-        Foreground(text)
+        Foreground(theme.Text)
 
     marginStyle := lipgloss.NewStyle().
-        Foreground(peach).
+        Foreground(theme.Peach).
         Bold(true)
 
     dividerStyle := lipgloss.NewStyle().
-        Foreground(overlay0)
+        Foreground(theme.Overlay0)
 
     // Build the result view
     var s strings.Builder
@@ -110,7 +111,7 @@ func (o *OrderResult) View() string {
     // Wrap in a box
     boxStyle := lipgloss.NewStyle().
         Border(lipgloss.RoundedBorder()).
-        BorderForeground(overlay0).
+        BorderForeground(theme.Overlay0).
         Padding(1).
         Width(o.width)
 

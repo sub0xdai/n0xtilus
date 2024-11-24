@@ -4,6 +4,7 @@ import (
     "fmt"
     "strings"
     "github.com/charmbracelet/lipgloss"
+    "github.com/sub0xdai/n0xtilus/internal/ui/styles"
 )
 
 // OrderSummary represents an order summary widget
@@ -52,109 +53,51 @@ func (o *OrderSummary) View() string {
         return ""
     }
 
-    // Styles
-    titleStyle := lipgloss.NewStyle().
-        Foreground(mauve).
-        Bold(true).
-        Padding(0, 1).
-        MarginBottom(1).
-        Border(lipgloss.NormalBorder(), false, false, true, false).
-        BorderForeground(overlay0)
+    var content []string
 
-    sectionStyle := lipgloss.NewStyle().
-        Foreground(subtext1).
-        Bold(true).
-        MarginTop(1).
-        MarginBottom(1)
+    // Title with direction
+    content = append(content, fmt.Sprintf("  Trade Summary (%s)", styles.PairStyle.Render(o.Direction)))
+    content = append(content, "")
 
-    labelStyle := lipgloss.NewStyle().
-        Foreground(subtext1).
-        Width(14)
+    // Trading pair
+    content = append(content, fmt.Sprintf("  %s %s",
+        styles.LabelStyle.Render("Pair:"),
+        styles.ValueStyle.Render(o.Pair),
+    ))
 
-    valueStyle := lipgloss.NewStyle().
-        Foreground(text).
-        PaddingLeft(1)
+    // Entry price
+    content = append(content, fmt.Sprintf("  %s %s",
+        styles.LabelStyle.Render("Entry:"),
+        styles.ValueStyle.Render(fmt.Sprintf("$%.2f", o.EntryPrice)),
+    ))
 
-    directionStyle := func() lipgloss.Style {
-        if o.Direction == "LONG" {
-            return lipgloss.NewStyle().
-                Foreground(green).
-                Bold(true).
-                Padding(0, 2)
-        }
-        return lipgloss.NewStyle().
-            Foreground(red).
-            Bold(true).
-            Padding(0, 2)
-    }()
+    // Stop loss
+    content = append(content, fmt.Sprintf("  %s %s",
+        styles.LabelStyle.Render("Stop Loss:"),
+        styles.ValueStyle.Render(fmt.Sprintf("$%.2f", o.StopLoss)),
+    ))
 
-    riskStyle := lipgloss.NewStyle().
-        Foreground(peach).
-        Bold(true)
+    // Leverage
+    content = append(content, fmt.Sprintf("  %s %s",
+        styles.LabelStyle.Render("Leverage:"),
+        styles.ValueStyle.Render(fmt.Sprintf("%.0fx", o.Leverage)),
+    ))
 
-    // Build the summary
-    var s strings.Builder
+    content = append(content, "")
 
-    // Title section
-    title := lipgloss.JoinHorizontal(
-        lipgloss.Center,
-        titleStyle.Render("Order Summary"),
-        directionStyle.Render(o.Direction),
-    )
-    s.WriteString(title)
-    s.WriteString("\n")
+    // Position size
+    content = append(content, fmt.Sprintf("  %s %s",
+        styles.LabelStyle.Render("Position:"),
+        styles.ValueStyle.Render(fmt.Sprintf("%.4f %s", o.Position, strings.Split(o.Pair, "/")[0])),
+    ))
 
-    // Trade details section
-    s.WriteString(sectionStyle.Render("Trade Details"))
-    s.WriteString("\n")
-    tradeDetails := []struct {
-        label string
-        value string
-    }{
-        {"Pair", o.Pair},
-        {"Entry", fmt.Sprintf("%.2f", o.EntryPrice)},
-        {"Stop Loss", fmt.Sprintf("%.2f", o.StopLoss)},
-    }
+    // Risk amount
+    content = append(content, fmt.Sprintf("  %s %s",
+        styles.LabelStyle.Render("Risk:"),
+        styles.RiskStyle.Render(fmt.Sprintf("$%.2f", o.RiskAmount)),
+    ))
 
-    for _, d := range tradeDetails {
-        row := lipgloss.JoinHorizontal(
-            lipgloss.Left,
-            labelStyle.Render(d.label+":"),
-            valueStyle.Render(d.value),
-        )
-        s.WriteString(row)
-        s.WriteString("\n")
-    }
-
-    // Position details section
-    s.WriteString(sectionStyle.Render("Position Details"))
-    s.WriteString("\n")
-    positionDetails := []struct {
-        label string
-        value string
-    }{
-        {"Leverage", fmt.Sprintf("%.1fx", o.Leverage)},
-        {"Position", fmt.Sprintf("%.4f %s", o.Position, strings.Split(o.Pair, "/")[0])},
-        {"Risk Amount", riskStyle.Render(fmt.Sprintf("$%.2f", o.RiskAmount))},
-    }
-
-    for _, d := range positionDetails {
-        row := lipgloss.JoinHorizontal(
-            lipgloss.Left,
-            labelStyle.Render(d.label+":"),
-            valueStyle.Render(d.value),
-        )
-        s.WriteString(row)
-        s.WriteString("\n")
-    }
-
-    // Wrap in a box
-    boxStyle := lipgloss.NewStyle().
-        Border(lipgloss.RoundedBorder()).
-        BorderForeground(overlay0).
-        Padding(1, 2).
-        Width(o.width).
-        Align(lipgloss.Center)
-
-    return boxStyle.Render(s.String())
+    return styles.BoxStyle.Copy().
+        BorderStyle(lipgloss.NormalBorder()).
+        Render(strings.Join(content, "\n"))
 }
